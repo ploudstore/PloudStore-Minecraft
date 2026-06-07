@@ -8,6 +8,7 @@ import org.ploudstore.ploudStorePlugin.PloudStorePlugin;
 import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class AdminCommand implements CommandExecutor, TabCompleter {
@@ -33,20 +34,23 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         }
 
         switch (args[0].toLowerCase()) {
-            case "reload" -> {
+            case "reload":
                 plugin.reload();
                 sender.sendMessage("§a[PloudStore] Config reloaded.");
-            }
-            case "status" -> {
+                break;
+            case "status":
                 sender.sendMessage("§e[PloudStore] Status:");
                 sender.sendMessage("§7  Executed cache (in-memory): §f" + executedCache.size() + " recent command(s)");
-            }
-            case "forcecheck" -> {
+                break;
+            case "forcecheck":
                 sender.sendMessage("§a[PloudStore] Forcing command check...");
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin,
-                        plugin.getCommandProcessor()::performCheck);
-            }
-            default -> sendHelp(sender);
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+                    public void run() { plugin.getCommandProcessor().performCheck(); }
+                });
+                break;
+            default:
+                sendHelp(sender);
+                break;
         }
 
         return true;
@@ -64,6 +68,6 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             return Arrays.asList("reload", "status", "forcecheck");
         }
-        return List.of();
+        return Collections.emptyList();
     }
 }

@@ -6,15 +6,16 @@ import com.google.gson.JsonParser;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.ploudstore.ploudStorePlugin.PluginLogger;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 
 public class UpdateChecker {
 
@@ -32,33 +33,32 @@ public class UpdateChecker {
     }
 
     public void checkAsync() {
-        Thread t = new Thread(this::check, "PloudStore-UpdateChecker");
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                check();
+            }
+        }, "PloudStore-UpdateChecker");
         t.setDaemon(true);
         t.start();
     }
 
     private void check() {
+        HttpURLConnection conn = null;
         try {
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .build();
+            conn = (HttpURLConnection) new URL(GITHUB_API).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("Accept", "application/vnd.github+json");
+            conn.setRequestProperty("User-Agent", "PloudStore-Minecraft");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(GITHUB_API))
-                    .header("Accept", "application/vnd.github+json")
-                    .header("User-Agent", "PloudStore-Minecraft")
-                    .GET()
-                    .timeout(Duration.ofSeconds(10))
-                    .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                logger.warning("[PloudStore] Update check failed — HTTP " + response.statusCode());
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                logger.warning("[PloudStore] Update check failed — HTTP " + code);
                 return;
             }
 
-            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+            String body = readStream(conn.getInputStream());
+            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
             String tag = json.get("tag_name").getAsString().replaceFirst("^v", "");
             String current = plugin.getDescription().getVersion();
 
@@ -73,13 +73,15 @@ public class UpdateChecker {
                 return;
             }
 
-            downloadJar(client, downloadUrl, current, tag);
+            downloadJar(downloadUrl, current, tag);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             logger.warning("[PloudStore] Erro ao verificar update: "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
         }
     }
 
@@ -94,35 +96,46 @@ public class UpdateChecker {
         return null;
     }
 
-    private void downloadJar(HttpClient client, String url, String current, String newVersion) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("User-Agent", "PloudStore-Minecraft")
-                .GET()
-                .timeout(Duration.ofSeconds(60))
-                .build();
+    private void downloadJar(String url, String current, String newVersion) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(60000);
+        conn.setRequestProperty("User-Agent", "PloudStore-Minecraft");
+        conn.setInstanceFollowRedirects(true);
 
-        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        try {
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                logger.warning("[PloudStore] Download falhou — HTTP " + code);
+                return;
+            }
 
-        if (response.statusCode() != 200) {
-            logger.warning("[PloudStore] Download falhou — HTTP " + response.statusCode());
-            return;
-        }
+            Path currentJar = Paths.get(getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
+            Path updateFolder = plugin.getServer().getUpdateFolderFile().toPath();
+            Files.createDirectories(updateFolder);
+            Path dest = updateFolder.resolve(currentJar.getFileName());
 
-        Path currentJar = Path.of(getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
-        Path updateFolder = plugin.getServer().getUpdateFolderFile().toPath();
-        Files.createDirectories(updateFolder);
-        Path dest = updateFolder.resolve(currentJar.getFileName());
-
-        try (InputStream in = response.body()) {
+            InputStream in = conn.getInputStream();
             Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+            in.close();
+
+            latestVersion = newVersion;
+            updateAvailable = true;
+
+            logger.info("[PloudStore] Update v" + current + " → v" + newVersion
+                    + " descarregado. Reinicia o servidor para aplicar.");
+        } finally {
+            conn.disconnect();
         }
+    }
 
-        latestVersion = newVersion;
-        updateAvailable = true;
-
-        logger.info("[PloudStore] Update v" + current + " → v" + newVersion
-                + " descarregado. Reinicia o servidor para aplicar.");
+    private String readStream(InputStream is) throws Exception {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) sb.append(line);
+        reader.close();
+        return sb.toString();
     }
 
     private int compareVersions(String a, String b) {

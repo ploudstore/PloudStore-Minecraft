@@ -1,6 +1,7 @@
 package org.ploudstore.ploudStorePlugin;
 
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.ploudstore.ploudStorePlugin.api.ApiClient;
@@ -39,13 +40,13 @@ public final class PloudStorePlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(this), this);
 
         AdminCommand adminCmd = new AdminCommand(this, executedCache);
-        var cmd = getCommand("ploudstore");
+        PluginCommand cmd = getCommand("ploudstore");
         if (cmd != null) {
             cmd.setExecutor(adminCmd);
             cmd.setTabCompleter(adminCmd);
         }
 
-        var storeCmd = getCommand("plstore");
+        PluginCommand storeCmd = getCommand("plstore");
         if (storeCmd != null) {
             storeCmd.setExecutor(new StoreCommand(this));
         }
@@ -86,7 +87,7 @@ public final class PloudStorePlugin extends JavaPlugin {
     }
 
     private boolean startCommandProcessor() {
-        String secretKey = getConfig().getString("secret-key", "").strip();
+        String secretKey = getConfig().getString("secret-key", "").trim();
         if (secretKey.isEmpty() || secretKey.equals("your-secret-key-here")) {
             getLogger().severe("[PloudStore] secret-key is not configured in config.yml!");
             getServer().getPluginManager().disablePlugin(this);
@@ -98,7 +99,9 @@ public final class PloudStorePlugin extends JavaPlugin {
         commandProcessor.startChecks();
 
         evictTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
-                this, executedCache::evictExpired, 72000L, 72000L);
+                this, new Runnable() {
+                    public void run() { executedCache.evictExpired(); }
+                }, 72000L, 72000L);
 
         return true;
     }

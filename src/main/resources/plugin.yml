@@ -1,7 +1,6 @@
 name: PloudStorePlugin
 version: '${project.version}'
 main: org.ploudstore.ploudStorePlugin.PloudStorePlugin
-api-version: '1.21'
 load: POSTWORLD
 description: PloudStore payment processor plugin
 authors: [PloudStore]

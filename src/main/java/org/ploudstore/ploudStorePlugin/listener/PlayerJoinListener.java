@@ -1,7 +1,5 @@
 package org.ploudstore.ploudStorePlugin.listener;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -22,15 +20,13 @@ public class PlayerJoinListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        var player = event.getPlayer();
+        final org.bukkit.entity.Player player = event.getPlayer();
 
         UpdateChecker updater = plugin.getUpdateChecker();
         if (updater != null && updater.isUpdateAvailable()
                 && player.hasPermission("ploudstore.admin")) {
-            player.sendMessage(Component.text(
-                    "[PloudStore] Nova versão v" + updater.getLatestVersion()
-                    + " disponível! Reinicia o servidor para aplicar o update.",
-                    NamedTextColor.YELLOW));
+            player.sendMessage("§e[PloudStore] Nova versão v" + updater.getLatestVersion()
+                    + " disponível! Reinicia o servidor para aplicar o update.");
         }
 
         CommandProcessor processor = plugin.getCommandProcessor();
@@ -40,7 +36,8 @@ public class PlayerJoinListener implements Listener {
         if (!processor.getQueuedPlayers().contains(name.toLowerCase(Locale.ROOT))) return;
 
         plugin.getPluginLogger().debug("[PloudStore] " + name + " joined with queued commands — requesting check.");
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin,
-                processor::requestCheck, 20L);
+        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+            public void run() { plugin.getCommandProcessor().requestCheck(); }
+        }, 20L);
     }
 }

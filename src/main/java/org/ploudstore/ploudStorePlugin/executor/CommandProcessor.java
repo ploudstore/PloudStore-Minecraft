@@ -12,7 +12,11 @@ import org.ploudstore.ploudStorePlugin.model.PendingResponse;
 import org.ploudstore.ploudStorePlugin.model.PloudCommand;
 import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -41,7 +45,9 @@ public class CommandProcessor {
     }
 
     public void startChecks() {
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, this::performCheck, 100L);
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+            public void run() { performCheck(); }
+        }, 100L);
     }
 
     public void stop() {
@@ -49,7 +55,9 @@ public class CommandProcessor {
     }
 
     public void requestCheck() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::performCheck);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+            public void run() { performCheck(); }
+        });
     }
 
     public Set<String> getQueuedPlayers() {
@@ -69,9 +77,11 @@ public class CommandProcessor {
         }
     }
 
-    private void scheduleNextCheck(int seconds) {
+    private void scheduleNextCheck(final int seconds) {
         if (stopped) return;
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, this::performCheck, (long) seconds * 20L);
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+            public void run() { performCheck(); }
+        }, (long) seconds * 20L);
     }
 
     private void doCheck() {
@@ -81,21 +91,20 @@ public class CommandProcessor {
         FetchResult result = apiClient.fetchPendingCommands();
 
         switch (result.getStatus()) {
-            case RATE_LIMITED -> {
+            case RATE_LIMITED:
                 logger.warning("[PloudStore] Rate limited (429) — retrying in 5 minutes.");
                 scheduleNextCheck(5 * 60);
                 return;
-            }
-            case FORBIDDEN -> {
+            case FORBIDDEN:
                 logger.warning("[PloudStore] Forbidden (403) — check your secret key. Retrying in 30 minutes.");
                 scheduleNextCheck(30 * 60);
                 return;
-            }
-            case ERROR -> {
+            case ERROR:
                 logger.warning("[PloudStore] Fetch failed — retrying in 1 minute.");
                 scheduleNextCheck(60);
                 return;
-            }
+            default:
+                break;
         }
 
         PendingResponse response = result.getResponse();
@@ -115,7 +124,7 @@ public class CommandProcessor {
     }
 
     private void processCommands(List<PloudCommand> commands, boolean executeOffline) {
-        List<String> completedIds = new ArrayList<>();
+        List<String> completedIds = new ArrayList<String>();
 
         for (PloudCommand cmd : commands) {
             if (!isValid(cmd)) continue;
@@ -145,27 +154,25 @@ public class CommandProcessor {
                 }
             }
 
-            String commandStr = resolveCommand(cmd);
+            final String commandStr = resolveCommand(cmd);
             if (commandStr == null) continue;
 
+            final String finalId = cmd.getId();
             if (cmd.getDelay() > 0) {
-                final String finalCmd = commandStr;
-                final String finalId = cmd.getId();
-                Bukkit.getScheduler().runTaskLater(plugin,
-                        () -> dispatchAndLog(finalCmd, finalId),
-                        (long) cmd.getDelay() * 20L);
+                Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+                    public void run() { dispatchAndLog(commandStr, finalId); }
+                }, (long) cmd.getDelay() * 20L);
             } else {
-                final String finalCmd = commandStr;
-                final String finalId = cmd.getId();
-                Bukkit.getScheduler().runTask(plugin,
-                        () -> dispatchAndLog(finalCmd, finalId));
+                Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                    public void run() { dispatchAndLog(commandStr, finalId); }
+                });
             }
 
             executedCache.add(cmd.getId());
             completedIds.add(cmd.getId());
 
             if (completedIds.size() % BATCH_SIZE == 0) {
-                confirmBatch(new ArrayList<>(completedIds));
+                confirmBatch(new ArrayList<String>(completedIds));
                 completedIds.clear();
             }
         }
@@ -179,12 +186,15 @@ public class CommandProcessor {
         String template = plugin.getConfig().getString(
                 "messages.not-enough-slots",
                 "&c[Loja] Precisa de {slots} slot(s) livre(s) no inventario para receber a sua compra. Tem apenas {free}.");
-        String msg = template
+        final String msg = template
                 .replace("{slots}", String.valueOf(required))
                 .replace("{free}", String.valueOf(free))
                 .replace("&", "§");
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (player.isOnline()) player.sendMessage(msg);
+        final Player p = player;
+        Bukkit.getScheduler().runTask(plugin, new Runnable() {
+            public void run() {
+                if (p.isOnline()) p.sendMessage(msg);
+            }
         });
     }
 
@@ -204,28 +214,32 @@ public class CommandProcessor {
     }
 
     private void confirmBatch(List<String> ids) {
-        scheduleConfirm(new ArrayList<>(ids), 0);
+        scheduleConfirm(new ArrayList<String>(ids), 0);
     }
 
-    private void scheduleConfirm(List<String> ids, int attempt) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (stopped) return;
-            if (apiClient.deleteCommands(ids)) {
-                logger.debug("[PloudStore] Confirmed " + ids.size() + " command(s): " + ids);
-                return;
+    private void scheduleConfirm(final List<String> ids, final int attempt) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+            public void run() {
+                if (stopped) return;
+                if (apiClient.deleteCommands(ids)) {
+                    logger.debug("[PloudStore] Confirmed " + ids.size() + " command(s): " + ids);
+                    return;
+                }
+                long delaySecs = attempt < 5 ? 10L * (1L << attempt) : 300L;
+                logger.warning(String.format(
+                        "[PloudStore] Confirm failed (attempt %d) — retrying in %ds: %s",
+                        attempt + 1, delaySecs, ids));
+                Bukkit.getScheduler().runTaskLaterAsynchronously(
+                        plugin, new Runnable() {
+                            public void run() { scheduleConfirm(ids, attempt + 1); }
+                        }, delaySecs * 20L);
             }
-            long delaySecs = attempt < 5 ? 10L * (1L << attempt) : 300L;
-            logger.warning(String.format(
-                    "[PloudStore] Confirm failed (attempt %d) — retrying in %ds: %s",
-                    attempt + 1, delaySecs, ids));
-            Bukkit.getScheduler().runTaskLaterAsynchronously(
-                    plugin, () -> scheduleConfirm(ids, attempt + 1), delaySecs * 20L);
         });
     }
 
     private String resolveCommand(PloudCommand cmd) {
         String raw = cmd.getResolvedCommand();
-        if (raw == null || raw.isBlank()) {
+        if (raw == null || raw.trim().isEmpty()) {
             logger.warning("[PloudStore] Empty resolvedCommand for ID " + cmd.getId() + " — skipping.");
             return null;
         }
@@ -234,7 +248,7 @@ public class CommandProcessor {
     }
 
     private Player findOnlinePlayer(String name) {
-        if (name == null || name.isBlank()) return null;
+        if (name == null || name.trim().isEmpty()) return null;
         String lower = name.toLowerCase(Locale.ROOT);
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (p.getName().toLowerCase(Locale.ROOT).equals(lower)) return p;
@@ -256,11 +270,11 @@ public class CommandProcessor {
             logger.warning("[PloudStore] Received null command or null ID — skipping.");
             return false;
         }
-        if (cmd.getResolvedCommand() == null || cmd.getResolvedCommand().isBlank()) {
+        if (cmd.getResolvedCommand() == null || cmd.getResolvedCommand().trim().isEmpty()) {
             logger.warning("[PloudStore] Command " + cmd.getId() + " has empty resolvedCommand — skipping.");
             return false;
         }
-        if (cmd.getIdentifier() == null || cmd.getIdentifier().isBlank()) {
+        if (cmd.getIdentifier() == null || cmd.getIdentifier().trim().isEmpty()) {
             logger.warning("[PloudStore] Command " + cmd.getId() + " has no player identifier — skipping.");
             return false;
         }

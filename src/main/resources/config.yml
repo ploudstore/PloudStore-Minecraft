@@ -1,0 +1,20 @@
+api:
+  # Secret key para autenticar com a API PloudStore (obrigatorio)
+  secret-key: "your-secret-key-here"
+
+  # Base URL da API (sem barra no final)
+  base-url: "https://command.ploudstore.com"
+
+  # Intervalo de fallback em segundos — usado apenas se a API nao retornar next_check
+  fallback-next-check-seconds: 60
+
+  # Timeout de conexao HTTP em segundos
+  http-timeout-seconds: 10
+
+  # Maximo de tentativas por requisicao HTTP
+  http-max-retries: 3
+
+messages:
+  # Mensagem enviada ao jogador quando nao tem slots suficientes no inventario.
+  # {slots} -> numero de slots necessarios, {free} -> slots que tem atualmente.
+  not-enough-slots: "&c[Loja] Precisa de {slots} slot(s) livre(s) no inventario para receber a sua compra. Tem apenas {free}."

@@ -1,0 +1,25 @@
+name: PloudStorePlugin
+version: '${project.version}'
+main: org.ploudstore.ploudStorePlugin.PloudStorePlugin
+api-version: '1.21'
+load: POSTWORLD
+description: PloudStore payment processor plugin
+authors: [PloudStore]
+
+commands:
+  ploudstore:
+    description: PloudStore admin commands
+    usage: /ploudstore <reload|status|forcecheck>
+    permission: ploudstore.admin
+  plstore:
+    description: Mostra o PIN de sessão da loja ao jogador
+    usage: /plstore
+    permission: ploudstore.player
+
+permissions:
+  ploudstore.admin:
+    description: Access to PloudStore admin commands
+    default: op
+  ploudstore.player:
+    description: Access to the /plstore PIN command
+    default: true

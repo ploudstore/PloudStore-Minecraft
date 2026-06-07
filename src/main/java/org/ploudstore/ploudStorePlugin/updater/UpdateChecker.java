@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.ploudstore.ploudStorePlugin.PluginLogger;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -21,11 +22,13 @@ public class UpdateChecker {
             "https://api.github.com/repos/ploudstore/PloudStore-Minecraft/releases/latest";
 
     private final JavaPlugin plugin;
+    private final PluginLogger logger;
     private volatile boolean updateAvailable = false;
     private volatile String latestVersion = null;
 
-    public UpdateChecker(JavaPlugin plugin) {
+    public UpdateChecker(JavaPlugin plugin, PluginLogger logger) {
         this.plugin = plugin;
+        this.logger = logger;
     }
 
     public void checkAsync() {
@@ -51,7 +54,7 @@ public class UpdateChecker {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                plugin.getLogger().warning("[PloudStore] Update check failed — HTTP " + response.statusCode());
+                logger.warning("[PloudStore] Update check failed — HTTP " + response.statusCode());
                 return;
             }
 
@@ -60,13 +63,13 @@ public class UpdateChecker {
             String current = plugin.getDescription().getVersion();
 
             if (compareVersions(tag, current) <= 0) {
-                plugin.getLogger().info("[PloudStore] Plugin atualizado (v" + current + ").");
+                logger.debug("[PloudStore] Plugin atualizado (v" + current + ").");
                 return;
             }
 
             String downloadUrl = findJarAsset(json.getAsJsonArray("assets"));
             if (downloadUrl == null) {
-                plugin.getLogger().warning("[PloudStore] Update v" + tag + " disponível mas sem JAR para download.");
+                logger.warning("[PloudStore] Update v" + tag + " disponível mas sem JAR para download.");
                 return;
             }
 
@@ -75,7 +78,7 @@ public class UpdateChecker {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            plugin.getLogger().warning("[PloudStore] Erro ao verificar update: "
+            logger.warning("[PloudStore] Erro ao verificar update: "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
@@ -102,7 +105,7 @@ public class UpdateChecker {
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
         if (response.statusCode() != 200) {
-            plugin.getLogger().warning("[PloudStore] Download falhou — HTTP " + response.statusCode());
+            logger.warning("[PloudStore] Download falhou — HTTP " + response.statusCode());
             return;
         }
 
@@ -118,7 +121,7 @@ public class UpdateChecker {
         latestVersion = newVersion;
         updateAvailable = true;
 
-        plugin.getLogger().info("[PloudStore] Update v" + current + " → v" + newVersion
+        logger.info("[PloudStore] Update v" + current + " → v" + newVersion
                 + " descarregado. Reinicia o servidor para aplicar.");
     }
 

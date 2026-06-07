@@ -3,6 +3,7 @@ package org.ploudstore.ploudStorePlugin.api;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.ploudstore.ploudStorePlugin.PluginLogger;
 import org.ploudstore.ploudStorePlugin.model.FetchResult;
 import org.ploudstore.ploudStorePlugin.model.PendingResponse;
 import org.ploudstore.ploudStorePlugin.model.PinResponse;
@@ -13,19 +14,18 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
-import java.util.logging.Logger;
 
 public class ApiClient {
 
     private final HttpClient httpClient;
     private final Gson gson;
-    private final Logger logger;
+    private final PluginLogger logger;
     private final String baseUrl;
     private final String secretKey;
     private final int timeoutSeconds;
     private final int maxRetries;
 
-    public ApiClient(String baseUrl, String secretKey, int timeoutSeconds, int maxRetries, Logger logger) {
+    public ApiClient(String baseUrl, String secretKey, int timeoutSeconds, int maxRetries, PluginLogger logger) {
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.secretKey = secretKey;
         this.timeoutSeconds = timeoutSeconds;
@@ -62,7 +62,6 @@ public class ApiClient {
                 }
 
                 if (response.statusCode() == 429) {
-                    logger.warning("[PloudStore] Rate limited (HTTP 429).");
                     return FetchResult.rateLimited();
                 }
 
@@ -71,28 +70,23 @@ public class ApiClient {
                     return FetchResult.forbidden();
                 }
 
-                logger.warning("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + response.statusCode() + ": " + truncate(response.body(), 300));
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return FetchResult.error();
             } catch (Exception e) {
-                logger.warning("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
 
             if (attempt < maxRetries) sleepBackoff(attempt);
         }
 
-        logger.severe("[PloudStore] All " + maxRetries + " fetch attempts failed.");
         return FetchResult.error();
     }
 
-    /**
-     * Confirms a batch of executed commands in a single API call.
-     * Endpoint: POST /commands/complete  Body: {"ids": ["id1","id2",...]}
-     */
     public boolean deleteCommands(List<String> ids) {
         String url = baseUrl + "/commands/complete";
 
@@ -118,30 +112,24 @@ public class ApiClient {
                     return true;
                 }
 
-                logger.warning("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + response.statusCode() + ": " + truncate(response.body(), 200));
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
             } catch (Exception e) {
-                logger.warning("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
 
             if (attempt < maxRetries) sleepBackoff(attempt);
         }
 
-        logger.severe("[PloudStore] Failed to confirm " + ids.size() + " command(s) after " + maxRetries + " attempts!");
+        logger.warning("[PloudStore] Failed to confirm " + ids.size() + " command(s) after " + maxRetries + " attempts!");
         return false;
     }
 
-    /**
-     * Fetches a one-time PIN for the given player name.
-     * Endpoint: GET /auth/pin/{name}
-     * Returns a PinResponse (with pin == null if the player has no active session),
-     * or null if the request failed entirely.
-     */
     public PinResponse fetchPlayerPin(String playerName) {
         String url = baseUrl + "/auth/pin/" + playerName;
 
@@ -167,14 +155,14 @@ public class ApiClient {
                     return null;
                 }
 
-                logger.warning("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + response.statusCode() + ": " + truncate(response.body(), 200));
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (Exception e) {
-                logger.warning("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
+                logger.debug("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
 

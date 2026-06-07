@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.ploudstore.ploudStorePlugin.PloudStorePlugin;
+import org.ploudstore.ploudStorePlugin.PluginLogger;
 import org.ploudstore.ploudStorePlugin.api.ApiClient;
 import org.ploudstore.ploudStorePlugin.model.FetchResult;
 import org.ploudstore.ploudStorePlugin.model.PendingResponse;
@@ -14,7 +15,6 @@ import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Logger;
 
 public class CommandProcessor {
 
@@ -23,35 +23,31 @@ public class CommandProcessor {
     private final PloudStorePlugin plugin;
     private final ApiClient apiClient;
     private final ExecutedCache executedCache;
-    private final Logger logger;
+    private final PluginLogger logger;
     private final int fallbackNextCheck;
 
     private final AtomicBoolean checkInProgress = new AtomicBoolean(false);
     private volatile boolean stopped = false;
 
-    // Players with pending commands that were offline during the last check.
-    // When one of them joins, an immediate check is triggered instead of waiting for the next interval.
     private final Set<String> queuedPlayers = ConcurrentHashMap.newKeySet();
 
-    public CommandProcessor(PloudStorePlugin plugin, ApiClient apiClient, ExecutedCache executedCache, int fallbackNextCheck) {
+    public CommandProcessor(PloudStorePlugin plugin, ApiClient apiClient, ExecutedCache executedCache,
+                            int fallbackNextCheck, PluginLogger logger) {
         this.plugin = plugin;
         this.apiClient = apiClient;
         this.executedCache = executedCache;
         this.fallbackNextCheck = fallbackNextCheck;
-        this.logger = plugin.getLogger();
+        this.logger = logger;
     }
 
-    /** Called once at startup; begins the self-scheduling check loop. */
     public void startChecks() {
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, this::performCheck, 100L); // 5 s
+        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, this::performCheck, 100L);
     }
 
-    /** Stops this processor from scheduling any further checks. */
     public void stop() {
         stopped = true;
     }
 
-    /** Called by PlayerJoinListener or the /ploudstore forcecheck command. */
     public void requestCheck() {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, this::performCheck);
     }
@@ -63,7 +59,7 @@ public class CommandProcessor {
     public void performCheck() {
         if (stopped) return;
         if (!checkInProgress.compareAndSet(false, true)) {
-            logger.fine("[PloudStore] Check already in progress — skipping.");
+            logger.debug("[PloudStore] Check already in progress — skipping.");
             return;
         }
         try {
@@ -79,7 +75,7 @@ public class CommandProcessor {
     }
 
     private void doCheck() {
-        logger.info("[PloudStore] Checking for pending commands...");
+        logger.debug("[PloudStore] Checking for pending commands...");
         queuedPlayers.clear();
 
         FetchResult result = apiClient.fetchPendingCommands();
@@ -110,11 +106,11 @@ public class CommandProcessor {
 
         List<PloudCommand> commands = response.getData();
         if (commands.isEmpty()) {
-            logger.info("[PloudStore] No pending commands.");
+            logger.debug("[PloudStore] No pending commands.");
             return;
         }
 
-        logger.info("[PloudStore] Found " + commands.size() + " pending command(s).");
+        logger.debug("[PloudStore] Found " + commands.size() + " pending command(s).");
         processCommands(commands, response.isExecuteOffline());
     }
 
@@ -125,14 +121,14 @@ public class CommandProcessor {
             if (!isValid(cmd)) continue;
 
             if (executedCache.contains(cmd.getId())) {
-                logger.fine("[PloudStore] Already confirmed (cache hit): " + cmd.getId());
+                logger.debug("[PloudStore] Already confirmed (cache hit): " + cmd.getId());
                 continue;
             }
 
             if (!executeOffline) {
                 Player online = findOnlinePlayer(cmd.getIdentifier());
                 if (online == null) {
-                    logger.info("[PloudStore] " + cmd.getIdentifier() + " is offline — will retry on join.");
+                    logger.debug("[PloudStore] " + cmd.getIdentifier() + " is offline — will retry on join.");
                     queuedPlayers.add(cmd.getIdentifier().toLowerCase(Locale.ROOT));
                     continue;
                 }
@@ -140,7 +136,7 @@ public class CommandProcessor {
                 if (cmd.getRequiredSlots() > 0) {
                     int freeSlots = getFreeSlots(online);
                     if (freeSlots < cmd.getRequiredSlots()) {
-                        logger.info(String.format(
+                        logger.debug(String.format(
                                 "[PloudStore] Skipping '%s' for %s — needs %d slots, only %d free.",
                                 cmd.getId(), cmd.getIdentifier(), cmd.getRequiredSlots(), freeSlots));
                         notifyNotEnoughSlots(online, cmd.getRequiredSlots(), freeSlots);
@@ -165,7 +161,6 @@ public class CommandProcessor {
                         () -> dispatchAndLog(finalCmd, finalId));
             }
 
-            // Optimistic confirmation: mark complete as soon as delivery criteria are met.
             executedCache.add(cmd.getId());
             completedIds.add(cmd.getId());
 
@@ -197,7 +192,7 @@ public class CommandProcessor {
         try {
             boolean ok = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             if (ok) {
-                logger.info("[PloudStore] Executed [" + id + "]: " + command);
+                logger.debug("[PloudStore] Executed [" + id + "]: " + command);
             } else {
                 logger.warning("[PloudStore] Command returned false [" + id + "]: " + command
                         + " — already confirmed. Check command syntax.");
@@ -212,12 +207,11 @@ public class CommandProcessor {
         scheduleConfirm(new ArrayList<>(ids), 0);
     }
 
-    // 10s → 20s → 40s → 80s → 160s → 300s (cap), retries forever until success or plugin stop
     private void scheduleConfirm(List<String> ids, int attempt) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             if (stopped) return;
             if (apiClient.deleteCommands(ids)) {
-                logger.info("[PloudStore] Confirmed " + ids.size() + " command(s): " + ids);
+                logger.debug("[PloudStore] Confirmed " + ids.size() + " command(s): " + ids);
                 return;
             }
             long delaySecs = attempt < 5 ? 10L * (1L << attempt) : 300L;

@@ -39,7 +39,7 @@ public class PlayerJoinListener implements Listener {
         String name = player.getName();
         if (!processor.getQueuedPlayers().contains(name.toLowerCase(Locale.ROOT))) return;
 
-        plugin.getLogger().info("[PloudStore] " + name + " joined with queued commands — requesting check.");
+        plugin.getPluginLogger().debug("[PloudStore] " + name + " joined with queued commands — requesting check.");
         plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin,
                 processor::requestCheck, 20L);
     }

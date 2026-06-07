@@ -1,5 +1,8 @@
 secret-key: "your-secret-key-here"
 
+# Ativa logs detalhados no console para diagnosticar problemas
+debug: false
+
 messages:
   # {slots} -> slots necessarios, {free} -> slots livres atuais
   not-enough-slots: "&c[Loja] Precisa de {slots} slot(s) livre(s) no inventario para receber a sua compra. Tem apenas {free}."

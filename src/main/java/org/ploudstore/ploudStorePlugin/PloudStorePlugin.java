@@ -23,13 +23,15 @@ public final class PloudStorePlugin extends JavaPlugin {
     private ApiClient apiClient;
     private BukkitTask evictTask;
     private UpdateChecker updateChecker;
+    private PluginLogger pluginLogger;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         executedCache = new ExecutedCache();
+        pluginLogger = new PluginLogger(getLogger(), getConfig().getBoolean("debug", false));
 
-        updateChecker = new UpdateChecker(this);
+        updateChecker = new UpdateChecker(this, pluginLogger);
         updateChecker.checkAsync();
 
         if (!startCommandProcessor()) return;
@@ -70,10 +72,15 @@ public final class PloudStorePlugin extends JavaPlugin {
         return updateChecker;
     }
 
+    public PluginLogger getPluginLogger() {
+        return pluginLogger;
+    }
+
     public void reload() {
         if (evictTask != null) { evictTask.cancel(); evictTask = null; }
         if (commandProcessor != null) { commandProcessor.stop(); commandProcessor = null; }
         reloadConfig();
+        pluginLogger.setDebug(getConfig().getBoolean("debug", false));
         startCommandProcessor();
         getLogger().info("[PloudStore] Reloaded.");
     }
@@ -86,8 +93,8 @@ public final class PloudStorePlugin extends JavaPlugin {
             return false;
         }
 
-        apiClient = new ApiClient(API_BASE_URL, secretKey, API_TIMEOUT_SECONDS, API_MAX_RETRIES, getLogger());
-        commandProcessor = new CommandProcessor(this, apiClient, executedCache, API_FALLBACK_NEXT_CHECK);
+        apiClient = new ApiClient(API_BASE_URL, secretKey, API_TIMEOUT_SECONDS, API_MAX_RETRIES, pluginLogger);
+        commandProcessor = new CommandProcessor(this, apiClient, executedCache, API_FALLBACK_NEXT_CHECK, pluginLogger);
         commandProcessor.startChecks();
 
         evictTask = Bukkit.getScheduler().runTaskTimerAsynchronously(

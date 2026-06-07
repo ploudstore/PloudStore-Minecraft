@@ -1,5 +1,6 @@
 package org.ploudstore.ploudStorePlugin.listener;
 
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -20,7 +21,7 @@ public class PlayerJoinListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        final org.bukkit.entity.Player player = event.getPlayer();
+        final Player player = event.getPlayer();
 
         UpdateChecker updater = plugin.getUpdateChecker();
         if (updater != null && updater.isUpdateAvailable()
@@ -32,11 +33,11 @@ public class PlayerJoinListener implements Listener {
         CommandProcessor processor = plugin.getCommandProcessor();
         if (processor == null) return;
 
-        String name = player.getName();
+        final String name = player.getName();
         if (!processor.getQueuedPlayers().contains(name.toLowerCase(Locale.ROOT))) return;
 
         plugin.getPluginLogger().debug("[PloudStore] " + name + " joined with queued commands — requesting check.");
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+        plugin.getPluginScheduler().runAsyncLater(new Runnable() {
             public void run() { plugin.getCommandProcessor().requestCheck(); }
         }, 20L);
     }

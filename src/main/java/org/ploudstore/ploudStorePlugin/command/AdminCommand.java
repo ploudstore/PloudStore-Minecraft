@@ -44,7 +44,7 @@ public class AdminCommand implements CommandExecutor, TabCompleter {
                 break;
             case "forcecheck":
                 sender.sendMessage("§a[PloudStore] Forcing command check...");
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+                plugin.getPluginScheduler().runAsync(new Runnable() {
                     public void run() { plugin.getCommandProcessor().performCheck(); }
                 });
                 break;

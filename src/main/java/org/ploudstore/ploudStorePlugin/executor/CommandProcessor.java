@@ -11,6 +11,7 @@ import org.ploudstore.ploudStorePlugin.model.FetchResult;
 import org.ploudstore.ploudStorePlugin.model.PendingResponse;
 import org.ploudstore.ploudStorePlugin.model.PloudCommand;
 import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
+import org.ploudstore.ploudStorePlugin.scheduler.PlatformScheduler;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,11 +25,12 @@ public class CommandProcessor {
 
     private static final int BATCH_SIZE = 3;
 
-    private final PloudStorePlugin plugin;
-    private final ApiClient apiClient;
-    private final ExecutedCache executedCache;
-    private final PluginLogger logger;
-    private final int fallbackNextCheck;
+    private final PloudStorePlugin   plugin;
+    private final ApiClient          apiClient;
+    private final ExecutedCache      executedCache;
+    private final PluginLogger       logger;
+    private final PlatformScheduler  scheduler;
+    private final int                fallbackNextCheck;
 
     private final AtomicBoolean checkInProgress = new AtomicBoolean(false);
     private volatile boolean stopped = false;
@@ -36,33 +38,30 @@ public class CommandProcessor {
     private final Set<String> queuedPlayers = ConcurrentHashMap.newKeySet();
 
     public CommandProcessor(PloudStorePlugin plugin, ApiClient apiClient, ExecutedCache executedCache,
-                            int fallbackNextCheck, PluginLogger logger) {
-        this.plugin = plugin;
-        this.apiClient = apiClient;
-        this.executedCache = executedCache;
+                            int fallbackNextCheck, PluginLogger logger, PlatformScheduler scheduler) {
+        this.plugin            = plugin;
+        this.apiClient         = apiClient;
+        this.executedCache     = executedCache;
         this.fallbackNextCheck = fallbackNextCheck;
-        this.logger = logger;
+        this.logger            = logger;
+        this.scheduler         = scheduler;
     }
 
     public void startChecks() {
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+        scheduler.runAsyncLater(new Runnable() {
             public void run() { performCheck(); }
         }, 100L);
     }
 
-    public void stop() {
-        stopped = true;
-    }
+    public void stop() { stopped = true; }
 
     public void requestCheck() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+        scheduler.runAsync(new Runnable() {
             public void run() { performCheck(); }
         });
     }
 
-    public Set<String> getQueuedPlayers() {
-        return queuedPlayers;
-    }
+    public Set<String> getQueuedPlayers() { return queuedPlayers; }
 
     public void performCheck() {
         if (stopped) return;
@@ -79,7 +78,7 @@ public class CommandProcessor {
 
     private void scheduleNextCheck(final int seconds) {
         if (stopped) return;
-        Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, new Runnable() {
+        scheduler.runAsyncLater(new Runnable() {
             public void run() { performCheck(); }
         }, (long) seconds * 20L);
     }
@@ -108,7 +107,6 @@ public class CommandProcessor {
         }
 
         PendingResponse response = result.getResponse();
-
         int nextCheck = response.getNextCheck();
         if (nextCheck <= 0) nextCheck = fallbackNextCheck;
         scheduleNextCheck(nextCheck);
@@ -159,11 +157,11 @@ public class CommandProcessor {
 
             final String finalId = cmd.getId();
             if (cmd.getDelay() > 0) {
-                Bukkit.getScheduler().runTaskLater(plugin, new Runnable() {
+                scheduler.runSyncLater(new Runnable() {
                     public void run() { dispatchAndLog(commandStr, finalId); }
                 }, (long) cmd.getDelay() * 20L);
             } else {
-                Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                scheduler.runSync(new Runnable() {
                     public void run() { dispatchAndLog(commandStr, finalId); }
                 });
             }
@@ -191,10 +189,8 @@ public class CommandProcessor {
                 .replace("{free}", String.valueOf(free))
                 .replace("&", "§");
         final Player p = player;
-        Bukkit.getScheduler().runTask(plugin, new Runnable() {
-            public void run() {
-                if (p.isOnline()) p.sendMessage(msg);
-            }
+        scheduler.runSync(new Runnable() {
+            public void run() { if (p.isOnline()) p.sendMessage(msg); }
         });
     }
 
@@ -218,21 +214,20 @@ public class CommandProcessor {
     }
 
     private void scheduleConfirm(final List<String> ids, final int attempt) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
+        scheduler.runAsync(new Runnable() {
             public void run() {
                 if (stopped) return;
                 if (apiClient.deleteCommands(ids)) {
                     logger.debug("[PloudStore] Confirmed " + ids.size() + " command(s): " + ids);
                     return;
                 }
-                long delaySecs = attempt < 5 ? 10L * (1L << attempt) : 300L;
+                final long delaySecs = attempt < 5 ? 10L * (1L << attempt) : 300L;
                 logger.warning(String.format(
                         "[PloudStore] Confirm failed (attempt %d) — retrying in %ds: %s",
                         attempt + 1, delaySecs, ids));
-                Bukkit.getScheduler().runTaskLaterAsynchronously(
-                        plugin, new Runnable() {
-                            public void run() { scheduleConfirm(ids, attempt + 1); }
-                        }, delaySecs * 20L);
+                scheduler.runAsyncLater(new Runnable() {
+                    public void run() { scheduleConfirm(ids, attempt + 1); }
+                }, delaySecs * 20L);
             }
         });
     }

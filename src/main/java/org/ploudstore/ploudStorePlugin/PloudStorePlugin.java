@@ -9,18 +9,28 @@ import org.ploudstore.ploudStorePlugin.command.StoreCommand;
 import org.ploudstore.ploudStorePlugin.executor.CommandProcessor;
 import org.ploudstore.ploudStorePlugin.listener.PlayerJoinListener;
 import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
+import org.ploudstore.ploudStorePlugin.updater.UpdateChecker;
 
 public final class PloudStorePlugin extends JavaPlugin {
+
+    private static final String API_BASE_URL = "https://command.ploudstore.com";
+    private static final int API_FALLBACK_NEXT_CHECK = 60;
+    private static final int API_TIMEOUT_SECONDS = 10;
+    private static final int API_MAX_RETRIES = 3;
 
     private ExecutedCache executedCache;
     private CommandProcessor commandProcessor;
     private ApiClient apiClient;
     private BukkitTask evictTask;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         executedCache = new ExecutedCache();
+
+        updateChecker = new UpdateChecker(this);
+        updateChecker.checkAsync();
 
         if (!startCommandProcessor()) return;
 
@@ -56,6 +66,10 @@ public final class PloudStorePlugin extends JavaPlugin {
         return apiClient;
     }
 
+    public UpdateChecker getUpdateChecker() {
+        return updateChecker;
+    }
+
     public void reload() {
         if (evictTask != null) { evictTask.cancel(); evictTask = null; }
         if (commandProcessor != null) { commandProcessor.stop(); commandProcessor = null; }
@@ -65,29 +79,15 @@ public final class PloudStorePlugin extends JavaPlugin {
     }
 
     private boolean startCommandProcessor() {
-        String secretKey = getConfig().getString("api.secret-key", "").strip();
+        String secretKey = getConfig().getString("secret-key", "").strip();
         if (secretKey.isEmpty() || secretKey.equals("your-secret-key-here")) {
-            getLogger().severe("[PloudStore] api.secret-key is not configured in config.yml!");
+            getLogger().severe("[PloudStore] secret-key is not configured in config.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return false;
         }
 
-        String baseUrl        = getConfig().getString("api.base-url", "https://command.ploudstore.com");
-        int fallbackNextCheck = getConfig().getInt("api.fallback-next-check-seconds", 60);
-        int timeout           = getConfig().getInt("api.http-timeout-seconds", 10);
-        int maxRetries        = getConfig().getInt("api.http-max-retries", 3);
-
-        if (fallbackNextCheck < 30) {
-            getLogger().warning("[PloudStore] fallback-next-check-seconds < 30 — using 30.");
-            fallbackNextCheck = 30;
-        }
-
-        getLogger().info("[PloudStore] base-url=" + baseUrl
-                + " fallback-next-check=" + fallbackNextCheck + "s"
-                + " timeout=" + timeout + "s retries=" + maxRetries);
-
-        apiClient = new ApiClient(baseUrl, secretKey, timeout, maxRetries, getLogger());
-        commandProcessor = new CommandProcessor(this, apiClient, executedCache, fallbackNextCheck);
+        apiClient = new ApiClient(API_BASE_URL, secretKey, API_TIMEOUT_SECONDS, API_MAX_RETRIES, getLogger());
+        commandProcessor = new CommandProcessor(this, apiClient, executedCache, API_FALLBACK_NEXT_CHECK);
         commandProcessor.startChecks();
 
         evictTask = Bukkit.getScheduler().runTaskTimerAsynchronously(

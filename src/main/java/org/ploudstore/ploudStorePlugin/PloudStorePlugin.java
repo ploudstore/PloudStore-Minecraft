@@ -3,10 +3,11 @@ package org.ploudstore.ploudStorePlugin;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.ploudstore.ploudStorePlugin.api.ApiClient;
-import org.ploudstore.ploudStorePlugin.command.AdminCommand;
-import org.ploudstore.ploudStorePlugin.command.StoreCommand;
+import org.ploudstore.ploudStorePlugin.command.PloudStoreCommand;
+import org.ploudstore.ploudStorePlugin.dispatch.BukkitCommandDispatcher;
 import org.ploudstore.ploudStorePlugin.executor.CommandProcessor;
 import org.ploudstore.ploudStorePlugin.listener.PlayerJoinListener;
+import org.ploudstore.ploudStorePlugin.platform.BukkitPlayerRegistry;
 import org.ploudstore.ploudStorePlugin.queue.ExecutedCache;
 import org.ploudstore.ploudStorePlugin.scheduler.BukkitSchedulerAdapter;
 import org.ploudstore.ploudStorePlugin.scheduler.FoliaSchedulerAdapter;
@@ -21,12 +22,12 @@ public final class PloudStorePlugin extends JavaPlugin {
     private static final int    API_TIMEOUT_SECONDS     = 10;
     private static final int    API_MAX_RETRIES         = 3;
 
-    private ExecutedCache    executedCache;
-    private CommandProcessor commandProcessor;
-    private ApiClient        apiClient;
-    private ScheduledTask    evictTask;
-    private UpdateChecker    updateChecker;
-    private PluginLogger     pluginLogger;
+    private ExecutedCache     executedCache;
+    private CommandProcessor  commandProcessor;
+    private ApiClient         apiClient;
+    private ScheduledTask     evictTask;
+    private UpdateChecker     updateChecker;
+    private PluginLogger      pluginLogger;
     private PlatformScheduler scheduler;
 
     @Override
@@ -40,23 +41,18 @@ public final class PloudStorePlugin extends JavaPlugin {
             getLogger().info("[PloudStore] Folia detectado — usando Folia schedulers.");
         }
 
-        updateChecker = new UpdateChecker(this, pluginLogger);
+        updateChecker = new UpdateChecker(getDescription().getVersion(), pluginLogger);
         updateChecker.checkAsync();
 
         if (!startCommandProcessor()) return;
 
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this), this);
 
-        AdminCommand adminCmd = new AdminCommand(this, executedCache);
+        PloudStoreCommand ploudStoreCmd = new PloudStoreCommand(this, executedCache);
         PluginCommand cmd = getCommand("ploudstore");
         if (cmd != null) {
-            cmd.setExecutor(adminCmd);
-            cmd.setTabCompleter(adminCmd);
-        }
-
-        PluginCommand storeCmd = getCommand("plstore");
-        if (storeCmd != null) {
-            storeCmd.setExecutor(new StoreCommand(this));
+            cmd.setExecutor(ploudStoreCmd);
+            cmd.setTabCompleter(ploudStoreCmd);
         }
 
         getLogger().info("[PloudStore] Plugin enabled.");
@@ -64,7 +60,7 @@ public final class PloudStorePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (evictTask != null)      { evictTask.cancel();      evictTask = null; }
+        if (evictTask != null)        { evictTask.cancel();      evictTask = null; }
         if (commandProcessor != null) { commandProcessor.stop(); }
         getLogger().info("[PloudStore] Plugin disabled.");
     }
@@ -92,8 +88,15 @@ public final class PloudStorePlugin extends JavaPlugin {
             return false;
         }
 
-        apiClient       = new ApiClient(API_BASE_URL, secretKey, API_TIMEOUT_SECONDS, API_MAX_RETRIES, pluginLogger);
-        commandProcessor = new CommandProcessor(this, apiClient, executedCache, API_FALLBACK_NEXT_CHECK, pluginLogger, scheduler);
+        String notEnoughSlotsMsg = getConfig().getString(
+                "messages.not-enough-slots",
+                "&c[Loja] Precisa de {slots} slot(s) livre(s) no inventario para receber a sua compra. Tem apenas {free}.");
+
+        apiClient        = new ApiClient(API_BASE_URL, secretKey, API_TIMEOUT_SECONDS, API_MAX_RETRIES, pluginLogger);
+        commandProcessor = new CommandProcessor(
+                apiClient, executedCache, API_FALLBACK_NEXT_CHECK, pluginLogger,
+                scheduler, new BukkitCommandDispatcher(), new BukkitPlayerRegistry(),
+                notEnoughSlotsMsg);
         commandProcessor.startChecks();
 
         final ExecutedCache cache = executedCache;

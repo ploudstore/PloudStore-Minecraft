@@ -7,18 +7,14 @@ authors: [PloudStore]
 
 commands:
   ploudstore:
-    description: PloudStore admin commands
-    usage: /ploudstore <reload|status|forcecheck>
-    permission: ploudstore.admin
-  plstore:
-    description: Mostra o PIN de sessão da loja ao jogador
-    usage: /plstore
-    permission: ploudstore.player
+    description: PloudStore commands
+    usage: /ploudstore <pin|secret|reload|status|forcecheck|help>
+    aliases: [ps]
 
 permissions:
   ploudstore.admin:
-    description: Access to PloudStore admin commands
+    description: Acesso aos comandos de administração do PloudStore
     default: op
   ploudstore.player:
-    description: Access to the /plstore PIN command
+    description: Acesso ao comando /ploudstore pin
     default: true

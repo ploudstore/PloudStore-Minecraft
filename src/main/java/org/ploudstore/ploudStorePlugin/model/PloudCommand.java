@@ -23,8 +23,23 @@ public class PloudCommand {
     /** Seconds to wait before executing this command (0 = execute immediately). */
     private int delay;
 
-    /** Minimum free inventory slots required before executing (0 = no requirement). */
-    private int requiredSlots;
+    /** Raw JSON string from the API, e.g. {"min_slot":1,"required_online":true} */
+    @com.google.gson.annotations.SerializedName("config")
+    private String configJson;
+
+    private transient CommandConfig parsedConfig;
+
+    private CommandConfig config() {
+        if (parsedConfig == null) {
+            if (configJson != null && !configJson.isEmpty()) {
+                try {
+                    parsedConfig = new com.google.gson.Gson().fromJson(configJson, CommandConfig.class);
+                } catch (Exception ignored) {}
+            }
+            if (parsedConfig == null) parsedConfig = new CommandConfig();
+        }
+        return parsedConfig;
+    }
 
     public String getId()              { return id; }
     public String getStatus()          { return status; }
@@ -33,7 +48,8 @@ public class PloudCommand {
     public int    getAttempts()        { return attempts; }
     public String getCreatedAt()       { return createdAt; }
     public int    getDelay()           { return delay; }
-    public int    getRequiredSlots()   { return requiredSlots; }
+    public int    getRequiredSlots()   { return config().getMinSlot(); }
+    public boolean isRequiredOnline()  { return config().isRequiredOnline(); }
 
     @Override
     public String toString() {

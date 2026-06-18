@@ -44,6 +44,7 @@ public class ApiClient {
                 HttpResult result = get(url);
 
                 if (result.status == 200) {
+                    logger.debug("[PloudStore] Raw pending response: " + result.body);
                     PendingResponse parsed = gson.fromJson(result.body, PendingResponse.class);
                     if (parsed == null) {
                         logger.warning("[PloudStore] Gson returned null for fetch response.");
@@ -64,9 +65,6 @@ public class ApiClient {
                 logger.debug("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + result.status + ": " + truncate(result.body, 300));
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return FetchResult.error();
             } catch (Exception e) {
                 logger.debug("[PloudStore] fetch attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -98,9 +96,6 @@ public class ApiClient {
                 logger.debug("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + result.status + ": " + truncate(result.body, 200));
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
             } catch (Exception e) {
                 logger.debug("[PloudStore] deleteCommands attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -133,9 +128,6 @@ public class ApiClient {
                 logger.debug("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
                         + " — HTTP " + result.status + ": " + truncate(result.body, 200));
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return null;
             } catch (Exception e) {
                 logger.debug("[PloudStore] fetchPlayerPin attempt " + attempt + "/" + maxRetries
                         + " — " + e.getClass().getSimpleName() + ": " + e.getMessage());

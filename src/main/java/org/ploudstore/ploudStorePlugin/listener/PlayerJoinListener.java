@@ -26,8 +26,8 @@ public class PlayerJoinListener implements Listener {
         UpdateChecker updater = plugin.getUpdateChecker();
         if (updater != null && updater.isUpdateAvailable()
                 && player.hasPermission("ploudstore.admin")) {
-            player.sendMessage("§e[PloudStore] Nova versão v" + updater.getLatestVersion()
-                    + " disponível! Reinicia o servidor para aplicar o update.");
+            player.sendMessage("§e[PloudStore] Update available! v" + updater.getLatestVersion()
+                    + " — Download it from your PloudStore dashboard.");
         }
 
         CommandProcessor processor = plugin.getCommandProcessor();

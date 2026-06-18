@@ -1,0 +1,9 @@
+{
+  "id": "ploudstore",
+  "name": "PloudStorePlugin",
+  "version": "${project.version}",
+  "description": "PloudStore payment processor plugin for Velocity",
+  "authors": ["PloudStore"],
+  "main": "org.ploudstore.ploudStorePlugin.PloudStoreVelocityPlugin",
+  "dependencies": []
+}

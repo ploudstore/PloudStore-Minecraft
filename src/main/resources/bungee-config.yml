@@ -1,0 +1,4 @@
+secret-key: "your-secret-key-here"
+
+# Ativa logs detalhados no console para diagnosticar problemas
+debug: false

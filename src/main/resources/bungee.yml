@@ -1,0 +1,5 @@
+name: PloudStorePlugin
+version: '${project.version}'
+main: org.ploudstore.ploudStorePlugin.PloudStoreBungeePlugin
+author: PloudStore
+description: PloudStore payment processor plugin for BungeeCord

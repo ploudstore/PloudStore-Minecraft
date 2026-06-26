@@ -120,10 +120,10 @@ public class CommandProcessor {
         }
 
         logger.debug("[PloudStore] Found " + commands.size() + " pending command(s).");
-        processCommands(commands, response.isExecuteOffline());
+        processCommands(commands);
     }
 
-    private void processCommands(List<PloudCommand> commands, boolean executeOffline) {
+    private void processCommands(List<PloudCommand> commands) {
         List<String> completedIds = new ArrayList<String>();
 
         for (PloudCommand cmd : commands) {
@@ -140,11 +140,10 @@ public class CommandProcessor {
             }
 
             int requiredSlots  = cmd.getRequiredSlots();
-            boolean requiredOnline = cmd.isRequiredOnline();
-            boolean mustBeOnline   = !executeOffline || requiredOnline;
+            boolean mustBeOnline = cmd.isRequiredOnline();
             logger.debug(String.format(
-                    "[PloudStore] cmd=%s user=%s requiredSlots=%d requiredOnline=%b executeOffline=%b mustBeOnline=%b",
-                    cmd.getId(), cmd.getIdentifier(), requiredSlots, requiredOnline, executeOffline, mustBeOnline));
+                    "[PloudStore] cmd=%s user=%s requiredSlots=%d mustBeOnline=%b",
+                    cmd.getId(), cmd.getIdentifier(), requiredSlots, mustBeOnline));
 
             if (mustBeOnline) {
                 if (!playerRegistry.isOnline(cmd.getIdentifier())) {
